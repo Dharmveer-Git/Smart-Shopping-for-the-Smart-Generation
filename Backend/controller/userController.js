@@ -1,11 +1,27 @@
-import mongoose from "mongoose";
-import User from "../model/userSchema.js"; // ✅ Use correct name (not "Use")
-import { Schema } from "mongoose";
+import User from "../model/userSchema.js";
 
- const getUser = async (req, res) => {
+const getUser = async (req, res) => {
   try {
-    const users = await User.find(); // Get all users
-    res.status(200).json(users);
+    // Pagination support for efficient data fetching with validation
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
+    const skip = (page - 1) * limit;
+
+    const users = await User.find()
+      .skip(skip)
+      .limit(limit)
+      .lean(); // Use lean() for better read performance
+
+    const total = await User.countDocuments();
+
+    res.status(200).json({
+      users,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalUsers: total
+      }
+    });
   } catch (error) {
     res.status(500).json({ message: "Error fetching users", error: error.message });
   }
