@@ -1,54 +1,77 @@
 import productModel from "../model/ProductSchema.js";
 import mongoose from "mongoose";
-// cteate  product
+
+// Create product
 const createProduct = async (req, res) => {
     try {
-        let { title, brand, category, description, price, stock, rating, numReviews, image, colors, sizes } = req.body;
+        const { title, brand, category, description, price, stock, rating, numReviews, image, colors, sizes } = req.body;
         
-        let product = await productModel.create({ title, brand, category, description, price, stock, rating, numReviews, image, colors, sizes  });
+        const product = await productModel.create({ title, brand, category, description, price, stock, rating, numReviews, image, colors, sizes });
 
         res.status(201).json(product);
-        console.log("Product Created:", product);
     } catch (error) {
-        console.error("Error creating product:", error);
         res.status(500).json({ error: error.message });
     }
 };
-// getproduct
+
+// Get products with pagination
 const getProducts = async (req, res) => {
     try {
-        let products = await productModel.find();
-        res.status(200).json(products);
+        // Pagination with validation to prevent DoS
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
+        const skip = (page - 1) * limit;
+
+        const products = await productModel.find()
+            .skip(skip)
+            .limit(limit)
+            .lean(); // Use lean() for better read performance
+
+        const total = await productModel.countDocuments();
+
+        res.status(200).json({
+            products,
+            pagination: {
+                currentPage: page,
+                totalPages: Math.ceil(total / limit),
+                totalProducts: total
+            }
+        });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 };
 
-
-
-//deleteproduct
+// Delete product
 const deleteproduct = async (req, res, next) => {
     try {
-        let { _id } = req.body;
-        console.log("Deleting Product ID:",_id);
+        const { _id } = req.body;
 
         if (!mongoose.Types.ObjectId.isValid(_id)) {
             return res.status(400).json({ success: false, message: "Invalid Product ID format" });
         }
         
-        let product = await productModel.deleteOne( {_id} );
+        const product = await productModel.deleteOne({ _id });
         res.status(200).json({ success: true, _id });
         
     } catch (error) {
-        console.log(error);
         next(error);
     }
 };
 
+// Update product
+// Note: Schema validation limits fields that can be updated
 const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const updated = await productModel.findByIdAndUpdate(id, req.body, { new: true });
+    // Only allow updating specific fields to prevent mass assignment
+    const { title, brand, category, description, price, stock, rating, numReviews, image, colors, sizes } = req.body;
+    const updateData = { title, brand, category, description, price, stock, rating, numReviews, image, colors, sizes };
+    
+    // Remove undefined values
+    Object.keys(updateData).forEach(key => updateData[key] === undefined && delete updateData[key]);
+    
+    const updated = await productModel.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
     if (!updated) {
       return res.status(404).json({ message: "Product not found" });
     }
@@ -58,4 +81,4 @@ const updateProduct = async (req, res) => {
   }
 };
 
-export {createProduct,getProducts,deleteproduct}
+export { createProduct, getProducts, deleteproduct, updateProduct };
